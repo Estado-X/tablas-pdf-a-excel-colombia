@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Las tablas del PDF, a Excel · Estado X</title>
+<meta name="description" content="Saca las tablas de un PDF de texto y llévalas a un Excel de verdad, con las cifras colombianas como números. El archivo no sale de tu navegador.">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f2ebdc">
+<link rel="canonical" href="https://estado-x.github.io/tablas-pdf-a-excel-colombia/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="es_CO">
+<meta property="og:site_name" content="Las tablas del PDF, a Excel · Consultorio X de Estado X">
+<meta property="og:url" content="https://estado-x.github.io/tablas-pdf-a-excel-colombia/">
+<meta property="og:title" content="Las tablas del PDF, a Excel">
+<meta property="og:description" content="Saca las tablas de un PDF de texto y llévalas a un Excel de verdad, con las cifras colombianas como números. El archivo no sale de tu navegador.">
+<meta property="og:image" content="https://estado-x.github.io/tablas-pdf-a-excel-colombia/docs/compartir.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Las tablas del PDF, a Excel. Herramienta abierta · Consultorio X de Estado X">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Las tablas del PDF, a Excel">
+<meta name="twitter:description" content="Saca las tablas de un PDF de texto y llévalas a un Excel de verdad. El archivo no sale de tu navegador.">
+<meta name="twitter:image" content="https://estado-x.github.io/tablas-pdf-a-excel-colombia/docs/compartir.png">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/estilos.css">
+</head>
+<body>
+<a class="saltar" href="#abrir">Ir a abrir un PDF</a>
+
+<header class="cab">
+  <div class="contenedor cab__in">
+    <div class="cab__texto">
+      <p class="kicker">Herramienta abierta · Consultorio X de Estado X</p>
+      <h1>Las tablas del PDF, a <em>Excel</em></h1>
+      <p class="bajada">El presupuesto aprobado, los anexos y los informes llegan en PDF, y sus tablas toca pasarlas a mano. Esta página las saca y te las entrega en un Excel, sin subir el archivo a ningún lado.</p>
+    </div>
+    <ol class="ruta" aria-label="Cómo se usa">
+      <li><span class="ruta__num" aria-hidden="true">1</span><span><span class="sr">1. </span>Abre un PDF con texto.</span></li>
+      <li><span class="ruta__num" aria-hidden="true">2</span><span><span class="sr">2. </span>Mira las tablas que encontró y elige cuáles van.</span></li>
+      <li><span class="ruta__num" aria-hidden="true">3</span><span><span class="sr">3. </span>Descarga el Excel, con una hoja por tabla.</span></li>
+    </ol>
+  </div>
+</header>
+
+<main>
+  <div class="contenedor cuerpo">
+
+    <section class="seccion" id="abrir" aria-labelledby="t-abrir">
+      <div class="seccion__cab">
+        <h2 id="t-abrir">Abre tu PDF</h2>
+        <p class="nota">Tu PDF no sale de tu navegador: se lee en tu computador y no se envía a ningún servidor.</p>
+      </div>
+
+      <div class="zona" id="zona">
+        <p class="zona__titulo">Arrastra aquí un PDF</p>
+        <p class="zona__texto">o elígelo de tu computador. Sirve con PDF que tienen texto (los que dejan seleccionar las palabras).</p>
+        <div class="zona__accion">
+          <button class="boton" type="button" id="btn-elegir">Elegir un PDF</button>
+          <button class="boton boton--linea" type="button" id="btn-ejemplo">Probar con el ejemplo</button>
+        </div>
+        <input class="sr" type="file" id="archivo" accept="application/pdf,.pdf" tabindex="-1" aria-label="Elegir un PDF">
+        <p class="zona__pie">El ejemplo es un presupuesto ficticio de un proyecto de cooperación inventado. <a href="ejemplos/presupuesto-ficticio.pdf" target="_blank" rel="noopener">Ver el PDF de ejemplo</a></p>
+      </div>
+
+      <fieldset class="opciones">
+        <legend class="sr">Opciones</legend>
+        <label class="opcion">
+          <input type="checkbox" id="op-cifras" checked>
+          <span><strong>Convertir cifras</strong> «$&nbsp;1.234.567,89», «12,5&nbsp;%» y «(1.200)» llegan al Excel como números que se pueden sumar. Apágalo para dejar el texto tal cual.</span>
+        </label>
+        <label class="opcion">
+          <input type="checkbox" id="op-renglones" checked>
+          <span><strong>Unir renglones partidos</strong> Cuando el texto de una celda ocupa varios renglones, los junta en una sola fila.</span>
+        </label>
+      </fieldset>
+
+      <div id="estado" role="status" aria-live="polite"></div>
+      <noscript><p class="aviso aviso--error">Esta página necesita JavaScript para leer el PDF en tu navegador.</p></noscript>
+    </section>
+
+    <section class="seccion" id="resultado" aria-labelledby="t-resultado" hidden>
+      <div class="seccion__cab">
+        <h2 id="t-resultado" tabindex="-1">Tablas encontradas</h2>
+        <p class="nota" id="resumen"></p>
+      </div>
+      <div class="barra">
+        <button class="boton" type="button" id="btn-excel">Descargar Excel</button>
+        <p class="barra__texto" id="barra-texto" aria-live="polite"></p>
+      </div>
+      <div class="tablas" id="tablas"></div>
+    </section>
+
+    <section class="seccion limites" aria-labelledby="t-no">
+      <div class="seccion__cab"><h2 id="t-no">Lo que no hace</h2></div>
+      <div class="limites__texto">
+        <p class="limites__uno">No lee PDF escaneados, no garantiza que cada celda quede en su sitio y no corrige los datos.</p>
+        <p>Solo lee PDF con texto. En tablas con celdas combinadas o sin columnas claras, alguna celda puede quedar corrida: por eso ves cada tabla antes de descargarla y puedes unir filas o columnas. Lo que venga mal en el PDF sale igual en el Excel.</p>
+      </div>
+    </section>
+
+    <section class="seccion limites" aria-labelledby="t-criterio">
+      <div class="seccion__cab"><h2 id="t-criterio">Dónde entra tu criterio</h2></div>
+      <div class="limites__texto">
+        <p class="limites__uno">Antes de usar el Excel, revisa que sus totales cuadren con los del PDF.</p>
+        <p>Suma cada columna y compárala con el total que trae el documento. Si no cuadra, busca la fila partida o la celda corrida, arréglala y vuelve a sumar. La herramienta copia; quien firma el informe eres tú.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <section class="hablamos oscuro" aria-labelledby="t-hablamos">
+    <div class="contenedor hablamos__in">
+      <p class="kicker">Consultorio X de Estado X</p>
+      <h2 id="t-hablamos">¿Hablamos de tu caso?</h2>
+      <p>Esta herramienta es una muestra. En Consultorio X montamos con tu equipo el trabajo completo alrededor de un proyecto: buscar la convocatoria, leer los términos de referencia, armar la propuesta y preparar el informe al financiador, con sus cifras.</p>
+      <a class="boton boton--claro" href="https://www.linkedin.com/in/juanperezcuervo/" target="_blank" rel="noopener">Escríbeme en LinkedIn</a>
+      <p class="firma">Juan Camilo Pérez Cuervo · Head de Alianzas y Proyectos Estratégicos de Estado X</p>
+    </div>
+  </section>
+</main>
+
+<footer class="pie oscuro">
+  <div class="contenedor pie__in">
+    <p>Hecho por Estado X · licencia MIT · Inspirado en <a href="https://github.com/camelot-dev/camelot" target="_blank" rel="noopener">Camelot</a>, de camelot-dev (licencia MIT); no reutiliza su código.</p>
+    <p>Lee los PDF con <a href="https://github.com/mozilla/pdf.js" target="_blank" rel="noopener">pdf.js</a>, de Mozilla (licencia Apache-2.0), incluida en la página. · <a href="https://github.com/Estado-X/tablas-pdf-a-excel-colombia" target="_blank" rel="noopener">Código en GitHub</a></p>
+    <p><a href="https://estadox.com" target="_blank" rel="noopener">estadox.com</a> · Esta página no tiene rastreadores.</p>
+  </div>
+</footer>
+
+<script src="assets/zip.js"></script>
+<script src="assets/excel.js"></script>
+<script src="assets/cifras.js"></script>
+<script src="assets/tablas.js"></script>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>
