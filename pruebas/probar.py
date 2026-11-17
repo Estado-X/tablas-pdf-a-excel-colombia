@@ -27,6 +27,7 @@ from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
+sys.dont_write_bytecode = True  # que no quede ejemplos/__pycache__ al correr las pruebas
 sys.path.insert(0, str(RAIZ / "ejemplos"))
 import generar_ejemplo as ejemplo  # noqa: E402
 
@@ -50,6 +51,13 @@ def servidor():
 def pdf_tabla(destino: pathlib.Path, filas, clave: str | None = None):
     doc = SimpleDocTemplate(str(destino), pagesize=letter, encrypt=clave)
     t = Table(filas, colWidths=[150, 130, 130])
+    t.setStyle(TableStyle([("FONT", (0, 0), (-1, -1), "Helvetica", 9), ("ALIGN", (1, 0), (-1, -1), "RIGHT")]))
+    doc.build([t])
+
+
+def pdf_tabla4(destino: pathlib.Path, filas):
+    doc = SimpleDocTemplate(str(destino), pagesize=letter)
+    t = Table(filas, colWidths=[110, 120, 100, 130])
     t.setStyle(TableStyle([("FONT", (0, 0), (-1, -1), "Helvetica", 9), ("ALIGN", (1, 0), (-1, -1), "RIGHT")]))
     doc.build([t])
 
@@ -203,6 +211,9 @@ def main() -> int:
                 "$ 1.234.567,89": 1234567.89, "1.234.567": 1234567, "12,5 %": 0.125, "(1.200)": -1200,
                 "($ 3.200.000)": -3200000, "-$ 1.200": -1200, "$ -1.200,5": -1200.5, "100,0 %": 1, "0": 0,
                 "0,5": 0.5, "−1.500": -1500, "COP 5.000": 5000, "12%": 0.12, "2026": 2026, "$ 0": 0,
+                "0,125": 0.125, "1234,567": 1234.567,
+                # Comas con grupos de tres dígitos: ¿miles de Estados Unidos o decimales? Ambiguo: texto.
+                "250,000": None, "1,500": None, "251,500": None, "$ 1,234,567": None, "(12,000)": None,
                 "(12,5 %)": -0.125, "1 234": None,
                 # Lo que NO es cifra se queda como texto
                 "007": None, "1.5": None, "1.1": None, "12/03/2026": None, "900.123.456-7": None,
@@ -213,6 +224,18 @@ def main() -> int:
             for (texto, esperado), real in zip(casos.items(), salida):
                 assert real == esperado, (texto, esperado, real)
             assert page.evaluate("Cifras.paraCsv(Cifras.leer('$ 1.234.567,89'))") == "1234567,89"
+            # El formato se decide por columna y nunca se mezcla.
+            fmt = lambda col: page.evaluate("(c) => Cifras.formatoDeColumna(c)", col)  # noqa: E731
+            assert fmt(["Budget", "$250,000", "12,000.50", "1,500"]) == "us"
+            assert fmt(["Valor", "250,000", "1,500"]) == "co"          # sin pista: cada celda ambigua queda como texto
+            assert fmt(["Valor", "$ 1.234.567,89", "12,5 %"]) == "co"
+            assert fmt(["Valor", "12,000.50", "12.000,50"]) == "texto"  # los dos formatos: no se toca nada
+            assert fmt(["Código", "1.1", "1.2", "10.5"]) == "co"        # códigos con punto no vuelven la columna de EE. UU.
+            us = page.evaluate("(ts) => ts.map(t => { const c = Cifras.leer(t, 'us'); return c ? c.valor : null; })",
+                               ["$250,000", "12,000.50", "1,500", "(3,200.75)", "USD 1,234,567.89", "800", "12.5%", "1.234.567,89", "007"])
+            assert us == [250000, 12000.5, 1500, -3200.75, 1234567.89, 800, 0.125, None, None], us
+            assert page.evaluate("Cifras.leer('12,000.50', 'texto')") is None
+            assert page.evaluate("Cifras.leer('12,000.50')") is None  # suelta y a la colombiana no es cifra
             assert page.evaluate("Cifras.paraCsv(Cifras.leer('12,5 %'))") == "12,5%"
             n = page.locator("#tablas .tabla").first.locator("td.num").count()
             assert n == 30, n  # 7 rubros × 4 cifras + total y porcentaje de la última fila
@@ -411,6 +434,50 @@ def main() -> int:
             assert not errores, errores
 
         c.prueba("fórmulas y HTML dentro del PDF o del nombre quedan como texto (Excel, CSV y pantalla)", t_inyeccion)
+
+        # 10b. Presupuesto en dólares
+        def t_dolares():
+            filas = [
+                ["Line", "Budget (USD)", "Units", "Spent (COP)"],
+                ["Personnel", "$250,000.00", "250,000", "$ 1.000.000.000"],
+                ["Travel", "12,000.50", "1,500", "48.002.000,50"],
+                ["Equipment", "1,500", "12", "6.000.000"],
+                ["Refund", "(3,200.75)", "251,500", "(12.803.000)"],
+                ["Total", "260,299.75", "503,012", "1.041.199.000,50"],
+            ]
+            ruta = carpeta / "dolares.pdf"
+            pdf_tabla4(ruta, filas)
+            abrir(page, ruta)
+            vistas = tablas_en_pantalla(page)
+            assert vistas[0][2] == filas, vistas[0][2]
+            ws = openpyxl.load_workbook(bajar_excel(page, carpeta, "dolares.xlsx")).worksheets[0]
+            # Columna B: tiene cifras que solo pueden ser de EE. UU.; toda se lee así (1,500 son mil quinientos).
+            assert [ws.cell(r, 2).value for r in range(2, 7)] == [250000, 12000.5, 1500, -3200.75, 260299.75]
+            assert abs(sum(ws.cell(r, 2).value for r in range(2, 6)) - ws["B6"].value) < 1e-6
+            assert ws["B2"].number_format == "#,##0.00"
+            # Columna C: solo cifras ambiguas; se quedan como texto (nunca 250 en vez de 250.000).
+            assert [ws.cell(r, 3).value for r in range(2, 7)] == ["250,000", "1,500", 12, "251,500", "503,012"]
+            assert ws["C2"].data_type == "s"
+            # Columna D: colombiana, como siempre.
+            assert [ws.cell(r, 4).value for r in range(2, 7)] == [1000000000, 48002000.5, 6000000, -12803000, 1041199000.5]
+            with page.expect_download() as d:
+                page.get_by_role("button", name="Descargar CSV").click()
+            destino = carpeta / "dolares.csv"
+            d.value.save_as(str(destino))
+            lineas = destino.read_bytes().decode("utf-8-sig").split("\r\n")
+            assert lineas[2] == "Travel;12000,50;1,500;48002000,50", lineas[2]
+            assert lineas[4] == "Refund;-3200,75;251,500;-12803000", lineas[4]
+            # Una columna que mezcla los dos formatos se deja entera como texto.
+            mezcla = [["Rubro", "Valor", "Otro"], ["A", "12,000.50", "1"], ["B", "12.000,50", "2"], ["C", "300", "3"]]
+            ruta2 = carpeta / "mezcla.pdf"
+            pdf_tabla(ruta2, mezcla)
+            abrir(page, ruta2)
+            ws = openpyxl.load_workbook(bajar_excel(page, carpeta, "mezcla.xlsx")).worksheets[0]
+            assert [ws.cell(r, 2).value for r in range(2, 5)] == ["12,000.50", "12.000,50", "300"]
+            assert [ws.cell(r, 3).value for r in range(2, 5)] == [1, 2, 3]
+            assert not errores, errores
+
+        c.prueba("presupuesto en dólares: el formato se decide por columna; lo ambiguo queda como texto", t_dolares)
 
         # 11. PDF hecho por un navegador: celdas combinadas y renglones partidos
         def t_navegador():

@@ -243,6 +243,7 @@ function repintar(indice, foco) {
 
 function vista(t, indice) {
   const convertir = opCifras.checked;
+  const formatos = Cifras.formatos(t.filas);
   const tabla = el('table', 'vista');
   const nCols = t.filas[0].length;
   const letras = el('tr');
@@ -288,9 +289,9 @@ function vista(t, indice) {
       }
     }
     tr.append(num);
-    t.filas[r].forEach((texto) => {
+    t.filas[r].forEach((texto, c) => {
       const td = el('td', null, texto);
-      if (convertir && Cifras.leer(texto)) td.className = 'num';
+      if (convertir && Cifras.leer(texto, formatos[c])) td.className = 'num';
       tr.append(td);
     });
     cuerpo.append(tr);
@@ -319,9 +320,10 @@ function base() {
   return (doc.nombre.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|\u0000-\u001F]/g, ' ').trim() || 'tablas').slice(0, 80);
 }
 
-function valorExcel(texto, convertir) {
+/* formato: cómo se lee la columna de esa celda ('co', 'us' o 'texto'); lo decide Cifras.formatos. */
+function valorExcel(texto, convertir, formato) {
   if (convertir) {
-    const c = Cifras.leer(texto);
+    const c = Cifras.leer(texto, formato);
     if (c) return { n: c.valor, s: Excel.estiloCifra(c) };
   }
   return texto;
@@ -331,10 +333,10 @@ function descargarExcel() {
   const convertir = opCifras.checked;
   const elegidas = doc.tablas.filter((t) => t.incluir);
   if (!elegidas.length) return;
-  const hojas = elegidas.map((t) => ({
-    nombre: nombreHoja(t),
-    filas: t.filas.map((f) => f.map((v) => valorExcel(v, convertir))),
-  }));
+  const hojas = elegidas.map((t) => {
+    const formatos = Cifras.formatos(t.filas);
+    return { nombre: nombreHoja(t), filas: t.filas.map((f) => f.map((v, c) => valorExcel(v, convertir, formatos[c]))) };
+  });
   const leidas = [];
   for (let n = 1; n <= doc.leidas; n++) if (doc.sinTexto.indexOf(n) < 0) leidas.push(n);
   const origen = [
@@ -357,9 +359,9 @@ function descargarExcel() {
   bajar(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', base() + ' - tablas.xlsx');
 }
 
-function celdaCsv(texto, convertir) {
+function celdaCsv(texto, convertir, formato) {
   let v = texto;
-  const c = Cifras.leer(texto);
+  const c = Cifras.leer(texto, formato);
   if (convertir && c) v = Cifras.paraCsv(c);
   // Un texto que empieza como fórmula se guarda con apóstrofo, para que la hoja de cálculo no lo calcule.
   else if (/^[=+\-@\t\r]/.test(v) && !c) v = "'" + v;
@@ -368,8 +370,9 @@ function celdaCsv(texto, convertir) {
 
 function descargarCsv(t) {
   const convertir = opCifras.checked;
+  const formatos = Cifras.formatos(t.filas);
   // Punto y coma y coma decimal: así lo abre un Excel configurado para Colombia. BOM para las tildes.
-  const texto = '\uFEFF' + t.filas.map((f) => f.map((v) => celdaCsv(v, convertir)).join(';')).join('\r\n') + '\r\n';
+  const texto = '\uFEFF' + t.filas.map((f) => f.map((v, c) => celdaCsv(v, convertir, formatos[c])).join(';')).join('\r\n') + '\r\n';
   bajar(new TextEncoder().encode(texto), 'text/csv;charset=utf-8', base() + ' - pag ' + t.pagina + ' tabla ' + t.numero + '.csv');
 }
 
