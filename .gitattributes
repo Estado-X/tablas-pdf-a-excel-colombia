@@ -1,0 +1,5 @@
+# Los finales de línea no se tocan: los PDF de ejemplo y pdf.js deben quedar byte a byte.
+* text=auto eol=lf
+*.pdf binary
+*.png binary
+assets/vendor/** -text
